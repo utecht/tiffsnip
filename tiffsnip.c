@@ -87,9 +87,8 @@ struct IFD* find_tag(struct IFD ifds[], int ifd_count, uint16 tag){
 
 void clear(FILE *fp, uint32 start, uint32 size){
    fseek(fp, start, SEEK_SET);
-   char buff[1] = {0};
+   char buff[200] = {0};
    fwrite(buff, sizeof(char), size, fp);
-   //printf("Clearing %dbytes at 0x%x\n", size, start);
 }
 
 void overwrite_ifd_offset(FILE *fp, uint32 offset, uint32 final_offset){
@@ -130,12 +129,19 @@ uint32 scan_ifd(FILE *fp, uint32 offset, int page_num, int delete){
      printf("Deleting IFD table\n");
      uint32 ifd_size = (sizeof(struct IFD) * ifd_count) + sizeof(uint16) + sizeof(uint32);
      clear(fp, offset, ifd_size);
-     // tiles found
-     if(tiles_found == TRUE){
-       printf("Were tiles found?\n");
-       struct IFD *size_row = find_tag(ifds, ifd_count, TIFFTAG_TILEBYTECOUNTS);
+     if(tiles_found == TRUE || strips_found == TRUE){
+       uint16 size_tag;
+       uint16 offset_tag;
+       if(tiles_found == TRUE){
+         offset_tag = TIFFTAG_TILEOFFSETS;
+         size_tag = TIFFTAG_TILEBYTECOUNTS;
+       } else {
+         offset_tag = TIFFTAG_STRIPOFFSETS;
+         size_tag = TIFFTAG_STRIPBYTECOUNTS;
+       }
+       struct IFD *size_row = find_tag(ifds, ifd_count, size_tag);
        printf("Found this many tilesizes: %d\n", size_row->count);
-       struct IFD *offset_row = find_tag(ifds, ifd_count, TIFFTAG_TILEOFFSETS);
+       struct IFD *offset_row = find_tag(ifds, ifd_count, offset_tag);
 
        if(size_row->count != offset_row->count){
          printf("Bad Tile offset/size row found, exiting.\n");
@@ -154,11 +160,6 @@ uint32 scan_ifd(FILE *fp, uint32 offset, int page_num, int delete){
        for(int i = 0; i < offset_row->count; i++){
          clear(fp, tile_addresses[i], tile_sizes[i]);
        }
-     }
-
-     // strips found
-     if(strips_found){
-       //do like above but different
      }
 
      // delete all off stored information
@@ -195,7 +196,11 @@ int main(int argc, char *argv[]) {
    uint32 next_offset = header.offset;
    uint32 last_offset;
    int page_count = 0;
-   int to_delete = atoi(argv[2]);
+   int to_delete = -1;
+   printf("%d", argc);
+   if(argc == 3){
+     to_delete = atoi(argv[2]);
+   }
    while (next_offset > 0) {
      page_count += 1;
      last_offset = next_offset;
