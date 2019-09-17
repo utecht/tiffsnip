@@ -1,0 +1,3 @@
+hexdump -s 0x585ba74 -n 2 -e '1/2 "Count:%u" "\n"' 114580.tiff
+hexdump -s 0x585ba76 -n 180 -e '1/2 "Tag:%u" 1/2 " Type:%u" 1/4 " Count:%u" 1/4 " Offset:0x%04x" "\n"' 114580.tiff
+hexdump -s 0x585BB2A -n 4 -e '1/4 "Offset:0x%04x" "\n"' 114580.tiff

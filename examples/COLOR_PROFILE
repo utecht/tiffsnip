@@ -1,0 +1,1 @@
+dd bs=1 skip=92360558 count=141992 if=114580.tiff of=colors
