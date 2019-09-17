@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include "tiff.h"
 
+#define TRUE 1
+#define FALSE 0
 
 struct Header {
   uint16 byte_order;
@@ -17,14 +19,96 @@ struct IFD {
   uint32 value;
 };
 
-unsigned int scan_ifd(FILE *fp, unsigned int offset, int page_num, int delete){
+int ifd_value_size(uint16 tag_type){
+  switch(tag_type){
+    case TIFF_NOTYPE:
+      return 0;      /* placeholder */
+      break;
+    case TIFF_BYTE:
+      return sizeof(uint8);        /* 8-bit unsigned integer */
+      break;
+    case TIFF_ASCII:
+      return sizeof(uint8);       /* 8-bit bytes w/ last byte null */
+      break;
+    case TIFF_SHORT:
+      return sizeof(uint16);     /* 16-bit unsigned integer */
+      break;
+    case TIFF_LONG:
+      return sizeof(uint32);
+      break;  /* 32-bit unsigned integer */
+    case TIFF_RATIONAL:
+      return sizeof(uint64_t); /* 64-bit unsigned fraction */
+      break;
+    case TIFF_SBYTE:
+      return sizeof(uint8);       /* !8-bit signed integer */
+      break;
+    case TIFF_UNDEFINED:
+      return sizeof(uint8);
+      break;   /* !8-bit untyped data */
+    case TIFF_SSHORT:
+      return sizeof(uint16);      /* !16-bit signed integer */
+      break;
+    case TIFF_SLONG:
+      return sizeof(uint32);      /* !32-bit signed integer */
+      break;
+    case TIFF_SRATIONAL:
+      return sizeof(uint64_t);  /* !64-bit signed fraction */
+      break;
+    case TIFF_FLOAT:
+      return sizeof(uint32);      /* !32-bit IEEE floating point */
+      break;
+    case TIFF_DOUBLE:
+      return sizeof(uint64_t);    /* !64-bit IEEE floating point */
+      break;
+    case TIFF_IFD:
+      return sizeof(uint32);
+      break;        /* %32-bit unsigned integer (offset) */
+    case TIFF_LONG8:
+      return sizeof(uint64_t);      /* BigTIFF 64-bit unsigned integer */
+      break;
+    case TIFF_SLONG8:
+      return sizeof(uint64_t);
+      break;     /* BigTIFF 64-bit signed integer */
+    case TIFF_IFD8:
+      return sizeof(uint64_t);
+      break;       /* BigTIFF 64-bit unsigned integer (offset) */
+  }
+  return 0;
+}
+
+struct IFD* find_tag(struct IFD ifds[], int ifd_count, uint16 tag){
+  for(int i = 0; i < ifd_count; i++){
+    if(ifds[i].tag == tag){
+      return &ifds[i];
+    }
+  }
+  return 0;
+}
+
+void clear(FILE *fp, uint32 start, uint32 size){
+   fseek(fp, start, SEEK_SET);
+   char buff[1] = {0};
+   fwrite(buff, sizeof(char), size, fp);
+   //printf("Clearing %dbytes at 0x%x\n", size, start);
+}
+
+void overwrite_ifd_offset(FILE *fp, uint32 offset, uint32 final_offset){
    fseek(fp, offset, SEEK_SET);
-   short int ifd_count;
+   uint16 ifd_count;
+   fread(&ifd_count, sizeof(ifd_count), 1, fp);
+   struct IFD ifds[ifd_count];
+   fread(&ifds, sizeof(struct IFD), ifd_count, fp);
+   fwrite(&final_offset, sizeof(uint32), 1, fp);
+}
+
+uint32 scan_ifd(FILE *fp, uint32 offset, int page_num, int delete){
+   fseek(fp, offset, SEEK_SET);
+   uint16 ifd_count;
    fread(&ifd_count, sizeof(ifd_count), 1, fp);
    printf("Image #%d\n", page_num);
    printf("Found %d IFDs\n", ifd_count);
-   int tiles_found = 1;
-   int strips_found = 1;
+   int tiles_found = FALSE;
+   int strips_found = FALSE;
    struct IFD ifds[ifd_count];
    fread(&ifds, sizeof(struct IFD), ifd_count, fp);
    for(int i = 0; i < ifd_count; i++){
@@ -33,26 +117,56 @@ unsigned int scan_ifd(FILE *fp, unsigned int offset, int page_num, int delete){
                                                          ifds[i].count,
                                                          ifds[i].value);
      if(ifds[i].tag == TIFFTAG_STRIPOFFSETS){
-       strips_found = 0;
+       strips_found = TRUE;
      }
      if(ifds[i].tag == TIFFTAG_TILEOFFSETS){
-       tiles_found = 0;
+       tiles_found = TRUE;
      }
    }
-   unsigned int next_offset;
+   uint32 next_offset;
    fread(&next_offset, sizeof(next_offset), 1, fp);
    printf("Next Offet: 0x%x\n", next_offset);
    if(delete){
-     printf("Need to delete some stuff........\n");
+     printf("Deleting IFD table\n");
+     uint32 ifd_size = (sizeof(struct IFD) * ifd_count) + sizeof(uint16) + sizeof(uint32);
+     clear(fp, offset, ifd_size);
      // tiles found
-     if (tiles_found){
-       //first allocate sizes
+     if(tiles_found == TRUE){
+       printf("Were tiles found?\n");
+       struct IFD *size_row = find_tag(ifds, ifd_count, TIFFTAG_TILEBYTECOUNTS);
+       printf("Found this many tilesizes: %d\n", size_row->count);
+       struct IFD *offset_row = find_tag(ifds, ifd_count, TIFFTAG_TILEOFFSETS);
 
+       if(size_row->count != offset_row->count){
+         printf("Bad Tile offset/size row found, exiting.\n");
+         return 1;
+       }
 
        //then iterate through offsets
+       fseek(fp, offset_row->value, SEEK_SET);
+       uint32 tile_addresses[offset_row->count];
+       fread(&tile_addresses, sizeof(uint32), offset_row->count, fp);
+
+       fseek(fp, size_row->value, SEEK_SET);
+       uint32 tile_sizes[size_row->count];
+       fread(&tile_sizes, sizeof(uint32), size_row->count, fp);
+
+       for(int i = 0; i < offset_row->count; i++){
+         clear(fp, tile_addresses[i], tile_sizes[i]);
+       }
      }
 
      // strips found
+     if(strips_found){
+       //do like above but different
+     }
+
+     // delete all off stored information
+     for(int i = 0; i < ifd_count; i++){
+       if(ifds[i].count > 1){
+         clear(fp, ifds[i].value, ifds[i].count * ifd_value_size(ifds[i].tag_type));
+       }
+     }
    }
    return next_offset;
 }
@@ -88,6 +202,25 @@ int main(int argc, char *argv[]) {
      next_offset = scan_ifd(fp, next_offset, page_count, page_count == to_delete);
      if(page_count == to_delete){
        printf("Updating last offset to next offset\n");
+       if(to_delete == 1){
+         // need to update offset from first header
+         fseek(fp, sizeof(struct Header) - sizeof(uint32), SEEK_SET);
+         fwrite(&next_offset, sizeof(uint32), 1, fp);
+         fclose(fp);
+         return 0;
+       } else {
+         // need to scan to correct offset
+         uint32 final_offset = next_offset;
+         next_offset = header.offset;
+         page_count = 1;
+         while (page_count < to_delete - 1){
+           next_offset = scan_ifd(fp, next_offset, page_count, FALSE);
+           page_count += 1;
+         }
+         overwrite_ifd_offset(fp, next_offset, final_offset);
+         fclose(fp);
+         return 0;
+       }
        return 0;
      }
    }
