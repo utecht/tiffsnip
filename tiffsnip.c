@@ -17,7 +17,7 @@ struct Header {
 struct IFD {
   uint16 tag;
   uint16 tag_type;
-  uint32 count;
+  int32 count;
   uint32 value;
 };
 
@@ -103,16 +103,15 @@ void clear(FILE *fp, uint32 start, int32 size){
 
 void overwrite_ifd_offset(FILE *fp, uint32 offset, uint32 final_offset){
    fseek(fp, offset, SEEK_SET);
-   uint16 ifd_count;
+   int16 ifd_count;
    fread(&ifd_count, sizeof(ifd_count), 1, fp);
-   struct IFD ifds[ifd_count];
-   fread(&ifds, sizeof(struct IFD), ifd_count, fp);
+   fseek(fp, sizeof(struct IFD) * ifd_count, SEEK_CUR);
    fwrite(&final_offset, sizeof(uint32), 1, fp);
 }
 
 uint32 scan_ifd(FILE *fp, uint32 offset, int page_num, int delete){
    fseek(fp, offset, SEEK_SET);
-   uint16 ifd_count;
+   int16 ifd_count;
    fread(&ifd_count, sizeof(ifd_count), 1, fp);
    printf("Image #%d\n", page_num);
    printf("Found %d IFDs\n", ifd_count);
@@ -137,7 +136,7 @@ uint32 scan_ifd(FILE *fp, uint32 offset, int page_num, int delete){
    printf("Next Offet: 0x%x\n", next_offset);
    if(delete){
      printf("Deleting IFD table\n");
-     int32 ifd_size = (sizeof(struct IFD) * ifd_count) + sizeof(uint16) + sizeof(uint32);
+     int32 ifd_size = (sizeof(struct IFD) * ifd_count) + sizeof(int16) + sizeof(uint32);
      clear(fp, offset, ifd_size);
      if(tiles_found == TRUE || strips_found == TRUE){
        uint16 size_tag;
@@ -219,6 +218,7 @@ int main(int argc, char *argv[]) {
        printf("Updating last offset to next offset\n");
        if(to_delete == 1){
          // need to update offset from first header
+         printf("Overwriting Header Offset: 0x%x\n", next_offset);
          fseek(fp, sizeof(struct Header) - sizeof(uint32), SEEK_SET);
          fwrite(&next_offset, sizeof(uint32), 1, fp);
          fclose(fp);
@@ -232,6 +232,7 @@ int main(int argc, char *argv[]) {
            next_offset = scan_ifd(fp, next_offset, page_count, FALSE);
            page_count += 1;
          }
+         printf("Overwriting IFD Offset: 0x%x -> 0x%x\n", next_offset, final_offset);
          overwrite_ifd_offset(fp, next_offset, final_offset);
          fclose(fp);
          return 0;
