@@ -6,6 +6,8 @@
 #define TRUE 1
 #define FALSE 0
 
+#define BUFFER_SIZE 2048
+
 struct Header {
   uint16 byte_order;
   uint16 magic_number;
@@ -85,10 +87,18 @@ struct IFD* find_tag(struct IFD ifds[], int ifd_count, uint16 tag){
   return 0;
 }
 
-void clear(FILE *fp, uint32 start, uint32 size){
+void clear(FILE *fp, uint32 start, int32 size){
    fseek(fp, start, SEEK_SET);
-   char buff[200] = {0};
-   fwrite(buff, sizeof(char), size, fp);
+   int32 remaining_size = size;
+   char buff[BUFFER_SIZE] = {0};
+   while(remaining_size > 0){
+     if(remaining_size > BUFFER_SIZE){
+       fwrite(buff, sizeof(char), BUFFER_SIZE, fp);
+     } else {
+       fwrite(buff, sizeof(char), remaining_size, fp);
+     }
+     remaining_size -= BUFFER_SIZE;
+   }
 }
 
 void overwrite_ifd_offset(FILE *fp, uint32 offset, uint32 final_offset){
@@ -127,7 +137,7 @@ uint32 scan_ifd(FILE *fp, uint32 offset, int page_num, int delete){
    printf("Next Offet: 0x%x\n", next_offset);
    if(delete){
      printf("Deleting IFD table\n");
-     uint32 ifd_size = (sizeof(struct IFD) * ifd_count) + sizeof(uint16) + sizeof(uint32);
+     int32 ifd_size = (sizeof(struct IFD) * ifd_count) + sizeof(uint16) + sizeof(uint32);
      clear(fp, offset, ifd_size);
      if(tiles_found == TRUE || strips_found == TRUE){
        uint16 size_tag;
