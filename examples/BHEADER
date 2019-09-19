@@ -1,0 +1,1 @@
+hexdump -n 12 -e '1/2 "Byte_Order:%04x" 1/2 " Magic_Number:%d" 1/2 " ByteSize:%d" 1/2 " Zero:%d" 1/8 " Offset:0x%x" "\n"' 114580.tiff
