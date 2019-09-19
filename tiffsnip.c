@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/types.h>
 #include "tiff.h"
 
-#define TRUE 1
-#define FALSE 0
+bool DEBUG = false;
 
 #define BUFFER_SIZE 2048
 char ZEROS[BUFFER_SIZE] = {0};
@@ -37,7 +37,7 @@ struct __attribute__((__packed__)) BIGIFD {
 int IFD_ROW_SIZE = sizeof(struct IFD);
 int OFFSET_SIZE = sizeof(uint32);
 int IFD_COUNT_SIZE = sizeof(int16);
-int BIG_TIFF = FALSE;
+bool BIG_TIFF = false;
 
 int ifd_value_size(uint16 tag_type){
     switch(tag_type){
@@ -136,39 +136,40 @@ void overwrite_ifd_offset(FILE *fp, off_t offset, off_t final_offset){
     fwrite(&final_offset, OFFSET_SIZE, 1, fp);
 }
 
-off_t scan_ifd(FILE *fp, off_t offset, int page_num, int delete){
+off_t scan_ifd(FILE *fp, off_t offset, int page_num, bool delete){
     fseeko(fp, offset, SEEK_SET);
     int ifd_count;
     fread(&ifd_count, IFD_COUNT_SIZE, 1, fp);
-    printf("Image #%d\n", page_num);
-    printf("Found %d IFDs\n", ifd_count);
-    int tiles_found = FALSE;
-    int strips_found = FALSE;
+    if(DEBUG) printf("Image #%d\n", page_num);
+    if(DEBUG) printf("Found %d IFDs\n", ifd_count);
+    bool tiles_found = false;
+    bool strips_found = false;
     struct IFD ifds[ifd_count];
     fread(&ifds, IFD_ROW_SIZE, ifd_count, fp);
     for(int i = 0; i < ifd_count; i++){
-        printf("TAG: %d, Type: %d, Count: %d, Value: %d\n", ifds[i].tag,
+        if(DEBUG) printf("TAG: %d, Type: %d, Count: %d, Value: %d\n",
+               ifds[i].tag,
                ifds[i].tag_type,
                ifds[i].count,
                ifds[i].value);
         if(ifds[i].tag == TIFFTAG_STRIPOFFSETS){
-            strips_found = TRUE;
+            strips_found = true;
         }
         if(ifds[i].tag == TIFFTAG_TILEOFFSETS){
-            tiles_found = TRUE;
+            tiles_found = true;
         }
     }
     off_t next_offset = 0;
     fread(&next_offset, OFFSET_SIZE, 1, fp);
-    printf("Next Offset: 0x%llx\n", next_offset);
+    if(DEBUG) printf("Next Offset: 0x%llx\n", next_offset);
     if(delete){
-        printf("Deleting IFD table\n");
+        if(DEBUG) printf("Deleting IFD table\n");
         int64_t ifd_size = (IFD_ROW_SIZE * ifd_count) + IFD_COUNT_SIZE + OFFSET_SIZE;
         tiff_clear(fp, offset, ifd_size);
-        if(tiles_found == TRUE || strips_found == TRUE){
+        if(tiles_found || strips_found){
             uint16 size_tag;
             uint16 offset_tag;
-            if(tiles_found == TRUE){
+            if(tiles_found){
                 offset_tag = TIFFTAG_TILEOFFSETS;
                 size_tag = TIFFTAG_TILEBYTECOUNTS;
             } else {
@@ -178,7 +179,7 @@ off_t scan_ifd(FILE *fp, off_t offset, int page_num, int delete){
             struct IFD *size_row;
             struct IFD *offset_row;
             size_row = find_tag(ifds, ifd_count, size_tag);
-            printf("Found this many tilesizes: %d\n", size_row->count);
+            if(DEBUG) printf("Found this many tilesizes: %d\n", size_row->count);
             offset_row = find_tag(ifds, ifd_count, offset_tag);
 
             if(size_row->count != offset_row->count){
@@ -211,39 +212,40 @@ off_t scan_ifd(FILE *fp, off_t offset, int page_num, int delete){
     return next_offset;
 }
 
-off_t scan_big_ifd(FILE *fp, off_t offset, int page_num, int delete){
+off_t scan_big_ifd(FILE *fp, off_t offset, int page_num, bool delete){
     fseeko(fp, offset, SEEK_SET);
     int64_t ifd_count = 0;
     fread(&ifd_count, IFD_COUNT_SIZE, 1, fp);
-    printf("Image #%d\n", page_num);
-    printf("Found %lld IFDs\n", ifd_count);
-    int tiles_found = FALSE;
-    int strips_found = FALSE;
+    if(DEBUG) printf("Image #%d\n", page_num);
+    if(DEBUG) printf("Found %lld IFDs\n", ifd_count);
+    bool tiles_found = false;
+    bool strips_found = false;
     struct BIGIFD ifds[ifd_count];
     fread(&ifds, IFD_ROW_SIZE, ifd_count, fp);
     for(int i = 0; i < ifd_count; i++){
-        printf("TAG: %d, Type: %d, Count: %lld, Value: %lld\n", ifds[i].tag,
+        if(DEBUG) printf("TAG: %d, Type: %d, Count: %lld, Value: %lld\n",
+               ifds[i].tag,
                ifds[i].tag_type,
                ifds[i].count,
                ifds[i].value);
         if(ifds[i].tag == TIFFTAG_STRIPOFFSETS){
-            strips_found = TRUE;
+            strips_found = true;
         }
         if(ifds[i].tag == TIFFTAG_TILEOFFSETS){
-            tiles_found = TRUE;
+            tiles_found = true;
         }
     }
     off_t next_offset = 0;
     fread(&next_offset, OFFSET_SIZE, 1, fp);
-    printf("Next Offset: 0x%llx\n", next_offset);
+    if(DEBUG) printf("Next Offset: 0x%llx\n", next_offset);
     if(delete){
-        printf("Deleting IFD table\n");
+        if(DEBUG) printf("Deleting IFD table\n");
         int64_t ifd_size = (IFD_ROW_SIZE * ifd_count) + IFD_COUNT_SIZE + OFFSET_SIZE;
         tiff_clear(fp, offset, ifd_size);
-        if(tiles_found == TRUE || strips_found == TRUE){
+        if(tiles_found || strips_found){
             uint16 size_tag;
             uint16 offset_tag;
-            if(tiles_found == TRUE){
+            if(tiles_found){
                 offset_tag = TIFFTAG_TILEOFFSETS;
                 size_tag = TIFFTAG_TILEBYTECOUNTS;
             } else {
@@ -253,7 +255,7 @@ off_t scan_big_ifd(FILE *fp, off_t offset, int page_num, int delete){
             struct BIGIFD *size_row;
             struct BIGIFD *offset_row;
             size_row = find_big_tag(ifds, ifd_count, size_tag);
-            printf("Found this many tilesizes: %lld\n", size_row->count);
+            if(DEBUG) printf("Found this many tilesizes: %lld\n", size_row->count);
             offset_row = find_big_tag(ifds, ifd_count, offset_tag);
 
             if(size_row->count != offset_row->count){
@@ -307,13 +309,13 @@ int main(int argc, char *argv[]) {
         IFD_ROW_SIZE = 20;
         OFFSET_SIZE = sizeof(uint64_t);
         IFD_COUNT_SIZE = sizeof(uint64_t);
-        BIG_TIFF = TRUE;
+        BIG_TIFF = true;
     }
     fread(&first_offset, OFFSET_SIZE, 1, fp);
-    printf("BO: %x\nMN: %d\nOffset: 0x%llx\n", header.byte_order,
+    if(DEBUG) printf("BO: %x\nMN: %d\nOffset: 0x%llx\n", header.byte_order,
            header.magic_number,
            first_offset);
-    printf("Offsetsize %d\n", OFFSET_SIZE);
+    if(DEBUG) printf("Offsetsize %d\n", OFFSET_SIZE);
     off_t next_offset = first_offset;
     off_t last_offset = 0;
     int page_count = 0;
@@ -324,18 +326,18 @@ int main(int argc, char *argv[]) {
     while (next_offset > 0) {
         page_count += 1;
         last_offset = next_offset;
-        if(BIG_TIFF == FALSE){
-            next_offset = scan_ifd(fp, next_offset, page_count, page_count == to_delete);
-        } else {
+        if(BIG_TIFF){
             next_offset = scan_big_ifd(fp, next_offset, page_count, page_count == to_delete);
+        } else {
+            next_offset = scan_ifd(fp, next_offset, page_count, page_count == to_delete);
         }
         if(page_count == to_delete){
-            printf("Updating last offset to next offset\n");
+            if(DEBUG) printf("Updating last offset to next offset\n");
             if(to_delete == 1){
                 // need to update offset from first header
-                printf("Overwriting Header Offset: 0x%llx\n", next_offset);
+                if(DEBUG) printf("Overwriting Header Offset: 0x%llx\n", next_offset);
                 fseek(fp, sizeof(struct Header), SEEK_SET);
-                if(BIG_TIFF == TRUE){
+                if(BIG_TIFF){
                     fseek(fp, sizeof(struct BigHeader), SEEK_CUR);
                 }
                 fwrite(&next_offset, OFFSET_SIZE, 1, fp);
@@ -347,14 +349,14 @@ int main(int argc, char *argv[]) {
                 next_offset = first_offset;
                 page_count = 1;
                 while (page_count < to_delete - 1){
-                    if(BIG_TIFF == FALSE){
-                        next_offset = scan_ifd(fp, next_offset, page_count, FALSE);
+                    if(BIG_TIFF){
+                        next_offset = scan_big_ifd(fp, next_offset, page_count, false);
                     } else {
-                        next_offset = scan_big_ifd(fp, next_offset, page_count, FALSE);
+                        next_offset = scan_ifd(fp, next_offset, page_count, false);
                     }
                     page_count += 1;
                 }
-                printf("Overwriting IFD Offset: 0x%llx -> 0x%llx\n", next_offset, final_offset);
+                if(DEBUG) printf("Overwriting IFD Offset: 0x%llx -> 0x%llx\n", next_offset, final_offset);
                 overwrite_ifd_offset(fp, next_offset, final_offset);
                 fclose(fp);
                 return 0;
