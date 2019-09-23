@@ -1,0 +1,1 @@
+convert -depth 8 -size 21140x21140+0 gray:test.tiff out3.png
