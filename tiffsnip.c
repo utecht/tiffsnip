@@ -115,7 +115,7 @@ struct BIGIFD* find_big_tag(struct BIGIFD ifds[], int64_t ifd_count, uint16 tag)
 }
 
 void tiff_clear(FILE *fp, off_t start, int64_t size){
-    //printf("Clearing %lld at 0x%llx\n", size, start);
+    if(DEBUG) printf("Clearing %lld at 0x%llx\n", size, start);
     fseeko(fp, start, SEEK_SET);
     int64_t remaining_size = size;
     while(remaining_size > 0){
@@ -195,9 +195,14 @@ off_t scan_ifd(FILE *fp, off_t offset, int page_num, bool delete){
             fseek(fp, size_row->value, SEEK_SET);
             uint32 tile_sizes[size_row->count];
             fread(&tile_sizes, OFFSET_SIZE, size_row->count, fp);
-
-            for(int i = 0; i < offset_row->count; i++){
-                tiff_clear(fp, tile_addresses[i], tile_sizes[i]);
+            // in the special case where a single tile/strip exists
+            // we need to delete the offset from the value/offset field
+            if(offset_row->count == 1){
+              tiff_clear(fp, offset_row->value, size_row->value);
+            } else {
+              for(int i = 0; i < offset_row->count; i++){
+                  tiff_clear(fp, tile_addresses[i], tile_sizes[i]);
+              }
             }
         }
 
@@ -272,8 +277,14 @@ off_t scan_big_ifd(FILE *fp, off_t offset, int page_num, bool delete){
             uint64_t tile_sizes[size_row->count];
             fread(&tile_sizes, OFFSET_SIZE, size_row->count, fp);
 
-            for(int i = 0; i < offset_row->count; i++){
-                tiff_clear(fp, tile_addresses[i], tile_sizes[i]);
+            // in the special case where a single tile/strip exists
+            // we need to delete the offset from the value/offset field
+            if(offset_row->count == 1){
+              tiff_clear(fp, offset_row->value, size_row->value);
+            } else {
+              for(int i = 0; i < offset_row->count; i++){
+                  tiff_clear(fp, tile_addresses[i], tile_sizes[i]);
+              }
             }
         }
 
