@@ -3,7 +3,7 @@ prefix = /usr/local
 all: tiffsnip
 
 tiffsnip: tiffsnip.c tiff.h tiffconf.h
-	gcc -o $@ $<
+	gcc -std=c99 -o $@ $<
 
 install: tiffsnip
 	install tiffsnip $(DESTDIR)$(prefix)/bin/tiffsnip
