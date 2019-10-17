@@ -1,7 +1,22 @@
+/*
+ * Copyright (c) 2019 Joseph Utecht
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include <sys/types.h>
 #include "tiff.h"
 
@@ -300,6 +315,17 @@ off_t scan_big_ifd(FILE *fp, off_t offset, int page_num, bool delete){
 }
 
 int main(int argc, char *argv[]) {
+    bool help = false;
+    help = argc != 3;
+    for(int i = 0; i < argc; i++){
+      if(strcmp(argv[i], "--help") == 0){
+        help = true;
+      }
+    }
+    if(help){
+      printf("tiffsnip, version 1.0\nA utility for zeroing pages from tiff files\n\nUsage: tiffsnip file page_index\n\tfile: the tiff file to be snipped\n\tpage_index: the page number to be snipped (1 indexed)\n");
+      return 0;
+    }
     FILE *fp;
     fp = fopen(argv[1], "r+b");
     if(fp == NULL){
